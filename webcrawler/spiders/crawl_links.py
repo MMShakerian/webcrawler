@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 from scrapy.spidermiddlewares.httperror import HttpError
 import os
 from datetime import datetime
+import time
 
 class LinkSpider(scrapy.Spider):
     name = "link_spider"
@@ -61,6 +62,9 @@ class LinkSpider(scrapy.Spider):
             # ذخیره لینک جدید در دیتابیس
             self.collection.insert_one({"url": full_url, "status": "pending"})
             self.total_links += 1
+
+            # اضافه کردن تأخیر 2 ثانیه‌ای بین درخواست‌ها
+            time.sleep(2)
 
             # ارسال درخواست با errback برای مدیریت خطاها مثل 404
             yield scrapy.Request(
