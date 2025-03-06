@@ -44,8 +44,15 @@ function fetchReportList() {
             reportList.innerHTML = '';
             data.reports.forEach(report => {
                 const listItem = document.createElement('li');
+                listItem.className = 'list-group-item';
                 listItem.textContent = report;
-                listItem.addEventListener('click', () => fetchReport(report));
+                listItem.addEventListener('click', () => {
+                    fetchReport(report);
+                    // حذف کلاس active از آیتم‌های دیگر
+                    document.querySelectorAll('.list-group-item').forEach(item => item.classList.remove('active'));
+                    // اضافه کردن کلاس active به آیتم انتخابی
+                    listItem.classList.add('active');
+                });
                 reportList.appendChild(listItem);
             });
         })
