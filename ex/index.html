@@ -9,6 +9,9 @@
         input { width: 100%; padding: 5px; }
         button { margin-top: 15px; padding: 10px; width: 100%; }
         pre { background-color: #f4f4f4; padding: 10px; margin-top: 10px; height: 200px; overflow: auto; }
+        ul { list-style-type: none; padding: 0; }
+        li { cursor: pointer; padding: 5px; background-color: #f4f4f4; margin-top: 5px; }
+        li:hover { background-color: #ddd; }
     </style>
 </head>
 <body>
@@ -28,6 +31,9 @@
 
     <h3>گزارش کرول</h3>
     <pre id="output"></pre>
+
+    <h3>لیست گزارشات</h3>
+    <ul id="reportList"></ul>
 
     <script src="popup.js"></script>
 </body>

@@ -2,6 +2,8 @@ import scrapy
 from pymongo import MongoClient
 from urllib.parse import urlparse
 from scrapy.spidermiddlewares.httperror import HttpError
+import os
+from datetime import datetime
 
 class LinkSpider(scrapy.Spider):
     name = "link_spider"
@@ -83,7 +85,11 @@ class LinkSpider(scrapy.Spider):
 
         # گزارش نهایی کرول
         report = (
-            "\n📊 **گزارش نهایی کرول:**\n"
+            f"\n📅 **تاریخ استخراج:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"🔗 **لینک استخراج:** {self.start_urls[0]}\n"
+            f"🗄 **نام دیتابیس:** {self.db.name}\n"
+            f"📂 **نام کلکشن:** {self.collection.name}\n\n"
+            "📊 **گزارش نهایی کرول:**\n"
             f"🔹 تعداد کل لینک‌های جدید استخراج‌شده: {self.total_links}\n"
             f"🔸 تعداد لینک‌های تکراری حذف‌شده: {self.duplicate_links}\n"
             f"⚠️ تعداد لینک‌های خارج از دامنه: {self.external_links}\n"
@@ -95,6 +101,13 @@ class LinkSpider(scrapy.Spider):
             f"🔹 تعداد آیتم‌های اسکرپ‌شده: {stats.get('item_scraped_count', 0)}\n"
             f"🔸 حداکثر عمق درخواست‌ها: {stats.get('request_depth_max', 0)}\n"
         )
+
+        # ذخیره گزارش در فایل با نام منحصر به فرد
+        timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+        report_filename = f'report_{timestamp}.txt'
+        report_path = os.path.join(os.path.dirname(__file__), '..', 'reports', report_filename)
+        with open(report_path, 'w', encoding='utf-8') as f:
+            f.write(report)
 
         print(report)
         # بستن اتصال به دیتابیس
