@@ -15,6 +15,7 @@ app.use(cors());
 app.use(bodyParser.json());
 
 let latestReport = "";
+let isCrawling = false;
 
 // ایجاد پوشه reports در صورت عدم وجود
 const reportsDir = path.join(__dirname, 'webcrawler', 'reports');
@@ -31,6 +32,7 @@ app.post('/start-crawl', (req, res) => {
     const command = `scrapy crawl link_spider -a start_url="${url}" -a db_name="${dbName}" -a collection_name="${collectionName}"`;
 
     // اجرای فرمان
+    isCrawling = true;
     exec(command, { cwd: scrapyProjectPath }, (error, stdout, stderr) => {
         if (error) {
             console.error(`خطا: ${error.message}`);
@@ -41,10 +43,19 @@ app.post('/start-crawl', (req, res) => {
         // ذخیره گزارش در فایل با نام منحصر به فرد
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const reportFilename = `report_${timestamp}.txt`;
-        fs.writeFileSync(path.join(reportsDir, reportFilename), stdout);
+        const reportPath = path.join(reportsDir, reportFilename);
+        fs.writeFileSync(reportPath, stdout);
+        // ذخیره گزارش در فایل latest_report.txt
+        fs.writeFileSync(path.join(reportsDir, 'latest_report.txt'), stdout);
         // بازگرداندن خروجی به اکستنشن
         res.json({ stdout, stderr });
+        isCrawling = false;
     });
+});
+
+// Endpoint برای بررسی وضعیت کرول
+app.get('/crawl-status', (req, res) => {
+    res.json({ isCrawling });
 });
 
 // Endpoint برای دریافت گزارش آخرین کرول
@@ -55,12 +66,16 @@ app.get('/crawl-report', (req, res) => {
 // Endpoint برای دریافت فایل گزارش آخرین کرول
 app.get('/download-report', (req, res) => {
     const reportPath = path.join(reportsDir, 'latest_report.txt');
-    res.download(reportPath, 'latest_report.txt', (err) => {
-        if (err) {
-            console.error(`خطا در ارسال فایل: ${err.message}`);
-            res.status(500).send('خطا در ارسال فایل');
-        }
-    });
+    if (fs.existsSync(reportPath)) {
+        res.download(reportPath, 'latest_report.txt', (err) => {
+            if (err) {
+                console.error(`خطا در ارسال فایل: ${err.message}`);
+                res.status(500).send('خطا در ارسال فایل');
+            }
+        });
+    } else {
+        res.status(404).send('گزارش یافت نشد');
+    }
 });
 
 // Endpoint برای دریافت لیست گزارشات

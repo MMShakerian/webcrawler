@@ -20,6 +20,8 @@ document.getElementById('crawlForm').addEventListener('submit', function (e) {
             }
         }
     );
+
+    checkCrawlStatus();
 });
 
 // تابع برای دریافت و نمایش گزارش کرول
@@ -70,6 +72,24 @@ function fetchReport(filename) {
         })
         .catch(error => {
             document.getElementById('output').textContent = `خطا: ${error.message}`;
+        });
+}
+
+// تابع برای بررسی وضعیت کرول
+function checkCrawlStatus() {
+    fetch('http://localhost:3000/crawl-status')
+        .then(response => response.json())
+        .then(data => {
+            if (data.isCrawling) {
+                document.getElementById('crawlStatus').textContent = 'در حال استخراج لینک‌ها...';
+                setTimeout(checkCrawlStatus, 2000); // بررسی مجدد بعد از 2 ثانیه
+            } else {
+                document.getElementById('crawlStatus').textContent = 'استخراج لینک‌ها به پایان رسید.';
+                fetchCrawlReport();
+            }
+        })
+        .catch(error => {
+            document.getElementById('crawlStatus').textContent = `خطا: ${error.message}`;
         });
 }
 

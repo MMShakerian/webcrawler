@@ -16,6 +16,7 @@
         .list-group-item.active { background-color: #007bff; color: #fff; }
         .list-group-item.active:hover { background-color: #0056b3; }
         .column { flex: 1; margin: 0 10px; }
+        .list-box { max-height: 345px; overflow-y: auto; } /* اضافه کردن این خط */
     </style>
 </head>
 <body>
@@ -51,7 +52,8 @@
         <div class="column">
             <h3 class="mt-4 text-center text-success">گزارش کرول</h3>
             <div class="report-box">
-                <pre id="output" class="mb-0" style="height: 400px; overflow:auto;"></pre>
+                <pre id="output" class="mb-0" style="height: 345px; overflow:auto;"></pre>
+                <p id="crawlStatus" class="mt-3 text-center text-warning"></p>
             </div>
         </div>
     </div>
