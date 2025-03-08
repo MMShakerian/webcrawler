@@ -24,6 +24,28 @@ document.getElementById('crawlForm').addEventListener('submit', function (e) {
     checkCrawlStatus();
 });
 
+document.getElementById('pauseCrawl').addEventListener('click', function () {
+    fetch('http://localhost:3000/pause-crawl', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('crawlStatus').textContent = data.message;
+        })
+        .catch(error => {
+            document.getElementById('crawlStatus').textContent = `خطا: ${error.message}`;
+        });
+});
+
+document.getElementById('resumeCrawl').addEventListener('click', function () {
+    fetch('http://localhost:3000/resume-crawl', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('crawlStatus').textContent = data.message;
+        })
+        .catch(error => {
+            document.getElementById('crawlStatus').textContent = `خطا: ${error.message}`;
+        });
+});
+
 // تابع برای دریافت و نمایش گزارش کرول
 function fetchCrawlReport() {
     fetch('http://localhost:3000/download-report')
@@ -81,7 +103,11 @@ function checkCrawlStatus() {
         .then(response => response.json())
         .then(data => {
             if (data.isCrawling) {
-                document.getElementById('crawlStatus').textContent = 'در حال استخراج لینک‌ها...';
+                if (data.isPaused) {
+                    document.getElementById('crawlStatus').textContent = 'کرول متوقف شده است.';
+                } else {
+                    document.getElementById('crawlStatus').textContent = 'در حال استخراج لینک‌ها...';
+                }
                 setTimeout(checkCrawlStatus, 2000); // بررسی مجدد بعد از 2 ثانیه
             } else {
                 document.getElementById('crawlStatus').textContent = 'استخراج لینک‌ها به پایان رسید.';

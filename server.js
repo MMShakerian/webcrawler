@@ -16,46 +16,78 @@ app.use(bodyParser.json());
 
 let latestReport = "";
 let isCrawling = false;
+let isPaused = false;
+let crawlProcess = null;
 
 // ایجاد پوشه reports در صورت عدم وجود
 const reportsDir = path.join(__dirname, 'webcrawler', 'reports');
 if (!fs.existsSync(reportsDir)) {
-    fs.mkdirSync(reportsDir);
+    fs.mkdirSync(reportsDir, { recursive: true });
 }
 
 // Endpoint برای شروع کرول
 app.post('/start-crawl', (req, res) => {
     const { url, dbName, collectionName } = req.body;
 
-    // مسیر پروژه Scrapy رو تنظیم کن
     const scrapyProjectPath = path.join(__dirname, 'webcrawler'); 
     const command = `scrapy crawl link_spider -a start_url="${url}" -a db_name="${dbName}" -a collection_name="${collectionName}"`;
 
-    // اجرای فرمان
     isCrawling = true;
-    exec(command, { cwd: scrapyProjectPath }, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`خطا: ${error.message}`);
-            return res.status(500).json({ error: error.message });
-        }
-        // ذخیره خروجی به عنوان گزارش آخرین کرول
-        latestReport = stdout;
-        // ذخیره گزارش در فایل با نام منحصر به فرد
+    isPaused = false;
+
+    crawlProcess = exec(command, { cwd: scrapyProjectPath });
+
+    crawlProcess.stdout.on('data', (data) => {
+        latestReport += data;
+    });
+
+    crawlProcess.stderr.on('data', (data) => {
+        console.error(`خطای کرول: ${data}`);
+    });
+
+    crawlProcess.on('close', (code) => {
+        console.log(`فرایند کرول با کد ${code} بسته شد`);
+        isCrawling = false;
+        crawlProcess = null;
+
+        // ذخیره گزارش در فایل
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const reportFilename = `report_${timestamp}.txt`;
         const reportPath = path.join(reportsDir, reportFilename);
-        fs.writeFileSync(reportPath, stdout);
-        // ذخیره گزارش در فایل latest_report.txt
-        fs.writeFileSync(path.join(reportsDir, 'latest_report.txt'), stdout);
-        // بازگرداندن خروجی به اکستنشن
-        res.json({ stdout, stderr });
-        isCrawling = false;
+        fs.writeFileSync(reportPath, latestReport);
+        fs.writeFileSync(path.join(reportsDir, 'latest_report.txt'), latestReport);
     });
+
+    // فقط یک پاسخ ارسال شود
+    res.json({ message: 'کرول شروع شد' });
+});
+
+
+app.post('/pause-crawl', (req, res) => {
+    if (isCrawling && crawlProcess) {
+        crawlProcess.kill('SIGTERM');  // ارسال سیگنال برای توقف فرآیند Scrapy
+        isPaused = true;
+        isCrawling = false;  // وضعیت کرول رو تغییر بده
+        crawlProcess = null;  // مقداردهی مجدد برای جلوگیری از اجرای مجدد کرول
+        res.json({ message: 'کرول متوقف شد' });
+    } else {
+        res.status(400).json({ error: 'فرآیند کرول در حال اجرا نیست یا قبلاً متوقف شده است' });
+    }
+});
+
+
+app.post('/resume-crawl', (req, res) => {
+    if (isPaused) {
+        isPaused = false;
+        res.json({ message: 'کرول ادامه یافت' });
+    } else {
+        res.status(400).json({ error: 'فرآیند کرول متوقف نشده است' });
+    }
 });
 
 // Endpoint برای بررسی وضعیت کرول
 app.get('/crawl-status', (req, res) => {
-    res.json({ isCrawling });
+    res.json({ isCrawling, isPaused });
 });
 
 // Endpoint برای دریافت گزارش آخرین کرول

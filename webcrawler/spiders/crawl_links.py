@@ -4,12 +4,11 @@ from urllib.parse import urlparse
 from scrapy.spidermiddlewares.httperror import HttpError
 import os
 from datetime import datetime
-import time
+from scrapy import signals
 
 class LinkSpider(scrapy.Spider):
     name = "link_spider"
 
-    # دریافت آرگومان‌های ورودی از خط فرمان
     def __init__(self, start_url=None, db_name="web_crawler", collection_name="links4", *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -18,76 +17,92 @@ class LinkSpider(scrapy.Spider):
         else:
             self.start_urls = ["https://www.example.com"]
 
-        # اتصال به MongoDB با استفاده از نام دیتابیس و کلکشن دریافتی
+        # اتصال به MongoDB
         self.client = MongoClient("mongodb://localhost:27017/")
         self.db = self.client[db_name]
         self.collection = self.db[collection_name]
 
-        # مجموعه لینک‌هایی که قبلاً دیده‌ایم (برای بهبود سرعت)
+        # مجموعه لینک‌های دیده‌شده
         self.seen_links = set()
 
         # متغیرهای شمارش
         self.total_links = 0
         self.duplicate_links = 0
         self.external_links = 0
-        self.not_found_links = 0  # شمارش لینک‌های 404
+        self.not_found_links = 0
 
         # دامنه اصلی سایت
         self.main_domain = urlparse(self.start_urls[0]).netloc
 
+        # متغیر توقف
+        self.paused = False
+
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        spider = super(LinkSpider, cls).from_crawler(crawler, *args, **kwargs)
+        crawler.signals.connect(spider.pause, signal=signals.spider_idle)
+        crawler.signals.connect(spider.resume, signal=signals.spider_opened)
+        return spider
+
     def parse(self, response):
-        # اگر صفحه 404 بود، از پردازش آن صرف نظر کن
+        if self.paused:
+            return  # توقف پردازش لینک‌ها
+
         if response.status == 404:
             return
 
         links = response.css('a::attr(href)').getall()
-
         for link in links:
+            if self.paused:
+                return  # جلوگیری از ارسال درخواست جدید
+
             full_url = response.urljoin(link.strip())
             parsed_url = urlparse(full_url)
 
-            # بررسی لینک تکراری بدون جستجو در دیتابیس
             if full_url in self.seen_links:
                 self.duplicate_links += 1
                 continue
 
-            # اضافه کردن لینک به مجموعه دیده‌شده‌ها
             self.seen_links.add(full_url)
 
-            # بررسی لینک‌های خارج از دامنه
             if parsed_url.netloc and parsed_url.netloc != self.main_domain:
                 self.external_links += 1
                 continue
 
-            # ذخیره لینک جدید در دیتابیس
+            # ذخیره لینک در دیتابیس
             self.collection.insert_one({"url": full_url, "status": "pending"})
             self.total_links += 1
 
-            # اضافه کردن تأخیر 2 ثانیه‌ای بین درخواست‌ها
-            time.sleep(2)
-
-            # ارسال درخواست با errback برای مدیریت خطاها مثل 404
-            yield scrapy.Request(
-                full_url,
-                callback=self.parse,
-                errback=self.handle_error
-            )
+            # ارسال درخواست جدید فقط در صورتی که کرالر متوقف نشده باشد
+            if not self.paused:
+                yield scrapy.Request(
+                    full_url,
+                    callback=self.parse,
+                    errback=self.handle_error
+                )
 
     def handle_error(self, failure):
-        # بررسی اینکه آیا خطا به دلیل کد 404 هست
         if failure.check(HttpError):
             response = failure.value.response
             if response.status == 404:
                 self.logger.info(f"404 error for {response.url}")
-                # به‌روزرسانی وضعیت لینک در دیتابیس
                 self.collection.update_one({"url": response.url}, {"$set": {"status": "404"}})
                 self.not_found_links += 1
 
-    def closed(self, reason):
-        # دسترسی به آمار Scrapy
-        stats = self.crawler.stats.get_stats()
+    def pause(self):
+        """متوقف کردن کرالر"""
+        self.paused = True
+        self.logger.info("Crawling paused.")
+        self.crawler.engine.pause()
 
-        # گزارش نهایی کرول
+    def resume(self):
+        """ادامه دادن کرالر"""
+        self.paused = False
+        self.logger.info("Crawling resumed.")
+        self.crawler.engine.unpause()
+
+    def closed(self, reason):
+        stats = self.crawler.stats.get_stats()
         report = (
             f"\n📅 **تاریخ استخراج:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"🔗 **لینک استخراج:** {self.start_urls[0]}\n"
@@ -106,13 +121,16 @@ class LinkSpider(scrapy.Spider):
             f"**🔸 حداکثر عمق درخواست‌ها:** {stats.get('request_depth_max', 0)}\n"
         )
 
-        # ذخیره گزارش در فایل با نام منحصر به فرد
+        # ذخیره گزارش
         timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
         report_filename = f'report_{timestamp}.txt'
         report_path = os.path.join(os.path.dirname(__file__), '..', 'reports', report_filename)
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write(report)
 
+        latest_report_path = os.path.join(os.path.dirname(__file__), '..', 'reports', 'latest_report.txt')
+        with open(latest_report_path, 'w', encoding='utf-8') as f:
+            f.write(report)
+
         print(report)
-        # بستن اتصال به دیتابیس
         self.client.close()
