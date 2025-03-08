@@ -85,7 +85,6 @@ function checkCrawlStatus() {
                 setTimeout(checkCrawlStatus, 2000); // بررسی مجدد بعد از 2 ثانیه
             } else {
                 document.getElementById('crawlStatus').textContent = 'استخراج لینک‌ها به پایان رسید.';
-                fetchCrawlReport();
             }
         })
         .catch(error => {

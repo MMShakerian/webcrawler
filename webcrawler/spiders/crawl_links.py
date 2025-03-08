@@ -41,6 +41,9 @@ class LinkSpider(scrapy.Spider):
             return
 
         links = response.css('a::attr(href)').getall()
+        textareas = response.css('textarea')
+        clickable_elements = response.css('button, [onclick]')
+        radio_buttons = response.css('input[type="radio"]')
 
         for link in links:
             full_url = response.urljoin(link.strip())
@@ -60,7 +63,7 @@ class LinkSpider(scrapy.Spider):
                 continue
 
             # ذخیره لینک جدید در دیتابیس
-            self.collection.insert_one({"url": full_url, "status": "pending"})
+            self.collection.insert_one({"url": full_url, "type": "link", "status": "pending"})
             self.total_links += 1
 
             # اضافه کردن تأخیر 2 ثانیه‌ای بین درخواست‌ها
@@ -72,6 +75,34 @@ class LinkSpider(scrapy.Spider):
                 callback=self.parse,
                 errback=self.handle_error
             )
+
+        # ذخیره textareaها در دیتابیس
+        for textarea in textareas:
+            self.collection.insert_one({
+                "html": textarea.get(),
+                "type": "textarea",
+                "css_selector": textarea.css('::attr(id)').get() or textarea.css('::attr(class)').get(),
+                "placeholder": textarea.css('::attr(placeholder)').get(),
+                "status": "pending"
+            })
+
+        # ذخیره المان‌های قابل کلیک در دیتابیس
+        for clickable in clickable_elements:
+            self.collection.insert_one({
+                "html": clickable.get(),
+                "type": "clickable",
+                "css_selector": clickable.css('::attr(id)').get() or clickable.css('::attr(class)').get(),
+                "status": "pending"
+            })
+
+        # ذخیره radio buttonها در دیتابیس
+        for radio in radio_buttons:
+            self.collection.insert_one({
+                "html": radio.get(),
+                "type": "radio",
+                "css_selector": radio.css('::attr(id)').get() or radio.css('::attr(class)').get(),
+                "status": "pending"
+            })
 
     def handle_error(self, failure):
         # بررسی اینکه آیا خطا به دلیل کد 404 هست
@@ -111,6 +142,11 @@ class LinkSpider(scrapy.Spider):
         report_filename = f'report_{timestamp}.txt'
         report_path = os.path.join(os.path.dirname(__file__), '..', 'reports', report_filename)
         with open(report_path, 'w', encoding='utf-8') as f:
+            f.write(report)
+
+        # ذخیره گزارش در فایل latest_report.txt
+        latest_report_path = os.path.join(os.path.dirname(__file__), '..', 'reports', 'latest_report.txt')
+        with open(latest_report_path, 'w', encoding='utf-8') as f:
             f.write(report)
 
         print(report)
